@@ -76,6 +76,8 @@ def compute_retention(
 ) -> float:
     """Evaluate model accuracy on a dataloader.
 
+    Handles both standard (tensor, tensor) and HuggingFace dict batches.
+
     Args:
         model: The model to evaluate.
         dataloader: Data to evaluate on.
@@ -84,14 +86,15 @@ def compute_retention(
     Returns:
         Accuracy as a float between 0.0 and 1.0.
     """
+    from clearn.utils import forward_with_inputs, unpack_batch
+
     model.eval()
     correct = 0
     total = 0
 
-    for inputs, targets in dataloader:
-        inputs = inputs.to(device)
-        targets = targets.to(device)
-        outputs = model(inputs)
+    for batch in dataloader:
+        model_inputs, targets = unpack_batch(batch, device)
+        outputs = forward_with_inputs(model, model_inputs)
         preds = outputs.argmax(dim=1)
         correct += (preds == targets).sum().item()
         total += targets.size(0)

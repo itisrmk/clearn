@@ -15,6 +15,12 @@ STRATEGY_REGISTRY: dict[str, type[BaseStrategy]] = {
     "der": DER,
 }
 
+# Lazy registration for strategies with optional deps
+_LAZY_STRATEGIES: dict[str, tuple[str, str]] = {
+    "lora-ewc": ("clearn.strategies.lora_ewc", "LoRAEWC"),
+    "lora_ewc": ("clearn.strategies.lora_ewc", "LoRAEWC"),
+}
+
 
 def get_strategy(
     name_or_instance: str | BaseStrategy,
@@ -24,7 +30,8 @@ def get_strategy(
     """Resolve a strategy from a string name or return an existing instance.
 
     Args:
-        name_or_instance: Strategy name (e.g. "ewc") or a BaseStrategy instance.
+        name_or_instance: Strategy name (e.g. "ewc", "lora-ewc") or a
+            BaseStrategy instance.
         model: The PyTorch model to protect.
         **kwargs: Strategy-specific keyword arguments.
 
@@ -38,14 +45,25 @@ def get_strategy(
         return name_or_instance
 
     name = name_or_instance.lower()
-    if name not in STRATEGY_REGISTRY:
-        available = ", ".join(sorted(STRATEGY_REGISTRY.keys()))
-        raise ValueError(
-            f"Unknown strategy '{name_or_instance}'. "
-            f"Available strategies: {available}"
-        )
 
-    return STRATEGY_REGISTRY[name](model, **kwargs)
+    # Check eager registry first
+    if name in STRATEGY_REGISTRY:
+        return STRATEGY_REGISTRY[name](model, **kwargs)
+
+    # Check lazy registry (optional deps)
+    if name in _LAZY_STRATEGIES:
+        module_path, class_name = _LAZY_STRATEGIES[name]
+        import importlib
+        module = importlib.import_module(module_path)
+        strategy_cls = getattr(module, class_name)
+        return strategy_cls(model, **kwargs)
+
+    all_available = sorted(set(list(STRATEGY_REGISTRY.keys()) + list(_LAZY_STRATEGIES.keys())))
+    available = ", ".join(all_available)
+    raise ValueError(
+        f"Unknown strategy '{name_or_instance}'. "
+        f"Available strategies: {available}"
+    )
 
 
 __all__ = ["BaseStrategy", "DER", "EWC", "get_strategy", "STRATEGY_REGISTRY"]

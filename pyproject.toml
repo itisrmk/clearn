@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clearn-ai"
-version = "0.1.0"
+version = "0.2.0"
 description = "Continual learning for PyTorch models. Wrap once. Train forever."
 readme = "README.md"
 license = "MIT"

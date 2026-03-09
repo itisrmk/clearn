@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 try:
-    from clearn.integrations.huggingface import from_pretrained
+    from clearn.integrations.huggingface import (
+        ContinualTrainer,
+        from_pretrained,
+    )
 
-    __all__ = ["from_pretrained"]
+    __all__ = ["from_pretrained", "ContinualTrainer"]
 except ImportError:
     def from_pretrained(*args, **kwargs):
         raise ImportError(
@@ -13,4 +16,10 @@ except ImportError:
             "Install with: pip install clearn-ai[hf]"
         )
 
-    __all__ = ["from_pretrained"]
+    def ContinualTrainer(*args, **kwargs):
+        raise ImportError(
+            "ContinualTrainer requires additional dependencies. "
+            "Install with: pip install clearn-ai[hf]"
+        )
+
+    __all__ = ["from_pretrained", "ContinualTrainer"]

@@ -54,6 +54,8 @@ class EWC(BaseStrategy):
         Raises:
             ValueError: If the dataloader is empty.
         """
+        from clearn.utils import forward_with_inputs, unpack_batch
+
         self.model.eval()
 
         fisher: dict[str, torch.Tensor] = {}
@@ -61,24 +63,27 @@ class EWC(BaseStrategy):
             if param.requires_grad:
                 fisher[name] = torch.zeros_like(param)
 
+        device = next(self.model.parameters()).device
         n_samples = 0
-        for inputs, targets in dataloader:
+        for batch in dataloader:
             if n_samples >= self._n_fisher_samples:
                 break
 
-            device = next(self.model.parameters()).device
-            inputs = inputs.to(device)
-            targets = targets.to(device)
+            model_inputs, targets = unpack_batch(batch, device)
 
-            batch_size = inputs.size(0)
+            # Get batch size from targets (works for both formats)
+            batch_size = targets.size(0)
             remaining = self._n_fisher_samples - n_samples
             if batch_size > remaining:
-                inputs = inputs[:remaining]
                 targets = targets[:remaining]
+                if isinstance(model_inputs, dict):
+                    model_inputs = {k: v[:remaining] for k, v in model_inputs.items()}
+                else:
+                    model_inputs = model_inputs[:remaining]
                 batch_size = remaining
 
             self.model.zero_grad()
-            outputs = self.model(inputs)
+            outputs = forward_with_inputs(self.model, model_inputs)
             loss = F.cross_entropy(outputs, targets)
             loss.backward()
 

@@ -11,13 +11,21 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from clearn.metrics import RetentionReport, _get_recommendation, compute_retention
 from clearn.strategies import BaseStrategy, get_strategy
-from clearn.utils import generate_task_id, get_device
+from clearn.utils import (
+    forward_with_inputs,
+    generate_task_id,
+    get_device,
+    inputs_for_buffer,
+    unpack_batch,
+)
 
 
 def _make_eval_subset(
     dataloader: DataLoader, n: int = 500
 ) -> DataLoader:
     """Extract a fixed-size subset from a dataloader for evaluation.
+
+    Handles both standard (tensor, tensor) and HuggingFace dict batches.
 
     Args:
         dataloader: The source dataloader.
@@ -29,8 +37,16 @@ def _make_eval_subset(
     all_inputs: list[torch.Tensor] = []
     all_targets: list[torch.Tensor] = []
     count = 0
+    is_dict = False
 
-    for inputs, targets in dataloader:
+    for batch in dataloader:
+        if isinstance(batch, dict):
+            is_dict = True
+            inputs = batch.get("input_ids", next(iter(batch.values())))
+            targets = batch["labels"]
+        else:
+            inputs, targets = batch[0], batch[1]
+
         remaining = n - count
         if remaining <= 0:
             break
@@ -131,13 +147,12 @@ class ContinualModel:
         self.model.train()
 
         for _epoch in range(epochs):
-            for inputs, targets in dataloader:
-                inputs = inputs.to(self._device)
-                targets = targets.to(self._device)
+            for batch in dataloader:
+                model_inputs, targets = unpack_batch(batch, self._device)
 
                 optimizer.zero_grad()
 
-                outputs = self.model(inputs)
+                outputs = forward_with_inputs(self.model, model_inputs)
                 task_loss = loss_fn(outputs, targets)
 
                 penalty = self.strategy.penalty()
@@ -149,8 +164,9 @@ class ContinualModel:
                 optimizer.step()
 
                 # Update replay buffer (no-op for non-replay strategies)
+                buf_inputs = inputs_for_buffer(model_inputs)
                 self.strategy.update_buffer(
-                    inputs.detach(), targets.detach(), logits=outputs.detach()
+                    buf_inputs.detach(), targets.detach(), logits=outputs.detach()
                 )
 
         # Consolidate — lock in knowledge from this task

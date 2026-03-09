@@ -11,7 +11,7 @@
     <a href="https://pypi.org/project/clearn-ai/"><img src="https://img.shields.io/pypi/v/clearn-ai?color=blue&label=PyPI" alt="PyPI"></a>
     <a href="https://pypi.org/project/clearn-ai/"><img src="https://img.shields.io/pypi/pyversions/clearn-ai" alt="Python"></a>
     <a href="https://github.com/itisrmk/clearn/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
-    <a href="https://github.com/itisrmk/clearn/actions"><img src="https://img.shields.io/badge/tests-50%20passed-brightgreen" alt="Tests"></a>
+    <a href="https://github.com/itisrmk/clearn/actions"><img src="https://img.shields.io/badge/tests-66%20passed-brightgreen" alt="Tests"></a>
   </p>
 </p>
 
@@ -95,7 +95,7 @@ That's it. Four steps. Your model now remembers.
 
 ## Strategies
 
-clearn ships two battle-tested strategies:
+clearn ships three strategies:
 
 ### EWC (Elastic Weight Consolidation)
 
@@ -124,12 +124,29 @@ model = clearn.wrap(net, strategy="der", buffer_size=500)
 | `alpha` | `0.1` | Weight for cross-entropy replay loss |
 | `beta` | `0.5` | Weight for logit-matching loss |
 
+### LoRA-EWC (Parameter-Efficient Continual Learning)
+
+**New in v0.2.** Combines LoRA adapters (via `peft`) with EWC regularization. Only the low-rank adapter weights are trained and protected — the base model stays frozen. Ideal for LLMs.
+
+```python
+# Requires: pip install clearn-ai[hf]
+model = clearn.from_pretrained("bert-base-uncased", strategy="lora-ewc", lora_r=8)
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `lora_r` | `8` | LoRA rank (lower = more efficient) |
+| `lora_alpha` | `16` | LoRA alpha scaling |
+| `lambda_` | `5000` | EWC regularization on LoRA weights |
+
 ### Which strategy should I use?
 
 ```
-Can you store past data?
-├── Yes  → DER++ (best retention)
-└── No   → EWC (no replay needed)
+Using a large language model?
+├── Yes  → LoRA-EWC (parameter-efficient + forgetting protection)
+└── No   → Can you store past data?
+           ├── Yes  → DER++ (best retention)
+           └── No   → EWC (no replay needed)
 ```
 
 ---
@@ -221,6 +238,41 @@ Run the benchmark yourself:
 
 ---
 
+## HuggingFace Integration
+
+**New in v0.2.** First-class support for HuggingFace Transformers.
+
+```python
+# Load any HuggingFace model with continual learning
+model = clearn.from_pretrained("bert-base-uncased", strategy="ewc", task="classification")
+model = clearn.from_pretrained("gpt2", strategy="lora-ewc", task="causal-lm")
+
+# Supported tasks: classification, token-classification, causal-lm, seq2seq-lm
+```
+
+**ContinualTrainer** — drop-in replacement for HuggingFace Trainer:
+
+```python
+from clearn.integrations.huggingface import ContinualTrainer
+
+trainer = ContinualTrainer(
+    model=cl_model,
+    args=training_args,
+    train_dataset=dataset,
+    task_id="sentiment_v1",
+)
+trainer.train()  # Automatically applies forgetting protection
+```
+
+**Dict-batch support** — `fit()` handles HuggingFace-style dict batches natively:
+
+```python
+# Works with both (tensor, tensor) tuples and {"input_ids": ..., "labels": ...} dicts
+cl_model.fit(hf_dataloader, optimizer, task_id="my_task")
+```
+
+---
+
 ## API Reference
 
 ```python
@@ -240,7 +292,8 @@ model.save("path/to/checkpoint")
 model = clearn.load("path/to/checkpoint", model=your_model)
 
 # HuggingFace (requires clearn-ai[hf])
-model = clearn.from_pretrained("bert-base-uncased", strategy="ewc")
+model = clearn.from_pretrained("bert-base-uncased", strategy="ewc", task="classification")
+model = clearn.from_pretrained("gpt2", strategy="lora-ewc", task="causal-lm", lora_r=8)
 ```
 
 ---
@@ -254,11 +307,12 @@ clearn/
 │   ├── strategies/
 │   │   ├── base.py           # Abstract strategy interface
 │   │   ├── ewc.py            # Elastic Weight Consolidation
-│   │   └── der.py            # Dark Experience Replay++
+│   │   ├── der.py            # Dark Experience Replay++
+│   │   └── lora_ewc.py       # LoRA + EWC hybrid (v0.2)
 │   ├── metrics.py            # RetentionReport & diff() logic
 │   └── integrations/
-│       └── huggingface.py    # HuggingFace from_pretrained()
-├── tests/                    # 50 tests, all passing
+│       └── huggingface.py    # from_pretrained() + ContinualTrainer
+├── tests/                    # 66 tests, all passing
 ├── examples/                 # Runnable demo scripts
 └── benchmarks/               # CIFAR-100 notebook
 ```

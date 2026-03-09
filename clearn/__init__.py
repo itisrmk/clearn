@@ -8,7 +8,7 @@ import torch.nn as nn
 
 from clearn.core import ContinualModel
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 def wrap(
