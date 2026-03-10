@@ -1,4 +1,4 @@
-clearn-ai>=0.3.0
+clearn-ai @ git+https://github.com/itisrmk/clearn.git@main
 gradio>=4.0
 matplotlib
 torch
