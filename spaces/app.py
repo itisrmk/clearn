@@ -435,7 +435,7 @@ def build_app() -> gr.Blocks:
             This demo trains a small MLP on synthetic sequential classification tasks and shows
             how different continual learning strategies preserve knowledge from earlier tasks.
 
-            `pip install clearn-ai` | [GitHub](https://github.com/rahulkashyap411/clearn) | [Docs](https://clearn.ai)
+            `pip install clearn-ai` | [GitHub](https://github.com/itisrmk/clearn) | [Docs](https://clearn.ai)
             """
         )
 
@@ -522,12 +522,12 @@ def build_app() -> gr.Blocks:
                 # Toggle strategy-specific sliders
                 def update_visibility(strategy: str) -> tuple:
                     return (
-                        gr.Slider(visible=(strategy == "EWC")),
-                        gr.Slider(visible=(strategy == "SI")),
-                        gr.Slider(visible=(strategy == "DER++")),
-                        gr.Slider(visible=(strategy == "DER++")),
-                        gr.Slider(visible=(strategy == "DER++")),
-                        gr.Slider(visible=(strategy == "GEM")),
+                        gr.update(visible=(strategy == "EWC")),
+                        gr.update(visible=(strategy == "SI")),
+                        gr.update(visible=(strategy == "DER++")),
+                        gr.update(visible=(strategy == "DER++")),
+                        gr.update(visible=(strategy == "DER++")),
+                        gr.update(visible=(strategy == "GEM")),
                     )
 
                 strategy_dd.change(
@@ -589,7 +589,7 @@ def build_app() -> gr.Blocks:
         gr.Markdown(
             """
             ---
-            *Built with [clearn](https://github.com/rahulkashyap411/clearn) and [Gradio](https://gradio.app).
+            *Built with [clearn](https://github.com/itisrmk/clearn) and [Gradio](https://gradio.app).
             Strategies: EWC (Kirkpatrick et al., 2017), SI (Zenke et al., 2017),
             DER++ (Buzzega et al., 2020), GEM/A-GEM (Lopez-Paz & Ranzato, 2017).*
             """
