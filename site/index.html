@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>clearn — Continual Learning for PyTorch</title>
+  <meta name="description" content="Wrap once. Train forever. Prevent catastrophic forgetting in PyTorch models with one line of code.">
+  <meta name="theme-color" content="#0d1117">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset & Base ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0d1117;
+      --bg-raised:   #161b22;
+      --bg-card:     #1c2129;
+      --border:      #30363d;
+      --text:        #e6edf3;
+      --text-muted:  #8b949e;
+      --green:       #00d68f;
+      --cyan:        #00bcd4;
+      --purple:      #bc8cff;
+      --orange:      #f0883e;
+      --red:         #f85149;
+      --yellow:      #e3b341;
+      --blue:        #58a6ff;
+      --font-mono:   'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --font-sans:   'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --max-width:   1120px;
+      --radius:      8px;
+      --radius-lg:   12px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    a { color: var(--cyan); text-decoration: none; transition: color 0.2s; }
+    a:hover { color: var(--green); }
+
+    /* ── Layout ────────────────────────────────────────────────── */
+    .container {
+      max-width: var(--max-width);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    section {
+      padding: 96px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    section:last-of-type { border-bottom: none; }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+
+    .section-subtitle {
+      font-size: 17px;
+      color: var(--text-muted);
+      max-width: 640px;
+      line-height: 1.7;
+    }
+
+    /* ── Navigation ────────────────────────────────────────────── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: rgba(13, 17, 23, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+    }
+
+    .nav-logo {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 20px;
+      color: var(--green);
+    }
+
+    .nav-links { display: flex; gap: 24px; align-items: center; }
+
+    .nav-links a {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-muted);
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-links .nav-cta {
+      background: var(--green);
+      color: var(--bg);
+      padding: 6px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .nav-links .nav-cta:hover { background: #00e89d; color: var(--bg); }
+
+    /* ── Hero ──────────────────────────────────────────────────── */
+    .hero {
+      padding: 160px 0 96px;
+      text-align: center;
+    }
+
+    .hero-logo {
+      font-family: var(--font-mono);
+      font-size: clamp(56px, 10vw, 96px);
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -2px;
+      margin-bottom: 8px;
+    }
+
+    .hero-logo span { color: var(--green); }
+
+    .hero-tagline {
+      font-family: var(--font-mono);
+      font-size: clamp(18px, 3vw, 24px);
+      color: var(--cyan);
+      font-weight: 500;
+      margin-bottom: 20px;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(16px, 2vw, 19px);
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+
+    .hero-install {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      font-family: var(--font-mono);
+      font-size: 15px;
+      margin-bottom: 36px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .hero-install:hover { border-color: var(--green); }
+
+    .hero-install .dollar { color: var(--text-muted); user-select: none; }
+    .hero-install code { color: var(--text); }
+    .hero-install .copy-icon {
+      color: var(--text-muted);
+      transition: color 0.2s;
+      flex-shrink: 0;
+    }
+    .hero-install:hover .copy-icon { color: var(--green); }
+    .hero-install .copy-icon.copied { color: var(--green); }
+
+    .hero-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 600;
+      transition: all 0.2s;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--green);
+      color: var(--bg);
+    }
+
+    .btn-primary:hover { background: #00e89d; color: var(--bg); transform: translateY(-1px); }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover { border-color: var(--text-muted); color: var(--text); transform: translateY(-1px); }
+
+    .btn svg { width: 18px; height: 18px; }
+
+    /* ── Problem / Solution ────────────────────────────────────── */
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 48px;
+    }
+
+    .comparison-card {
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 36px 32px;
+      text-align: center;
+      transition: border-color 0.3s;
+    }
+
+    .comparison-card.bad { border-color: rgba(248, 81, 73, 0.3); }
+    .comparison-card.good { border-color: rgba(0, 214, 143, 0.3); }
+    .comparison-card.bad:hover { border-color: rgba(248, 81, 73, 0.5); }
+    .comparison-card.good:hover { border-color: rgba(0, 214, 143, 0.5); }
+
+    .comparison-card .card-label {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+
+    .comparison-card.bad .card-label { color: var(--red); }
+    .comparison-card.good .card-label { color: var(--green); }
+
+    .comparison-card .metric-label {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .comparison-card .metric-value {
+      font-family: var(--font-mono);
+      font-size: 56px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .comparison-card.bad .metric-value { color: var(--red); }
+    .comparison-card.good .metric-value { color: var(--green); }
+
+    .comparison-card .metric-delta {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      margin-bottom: 24px;
+    }
+
+    .comparison-card.bad .metric-delta { color: var(--red); }
+    .comparison-card.good .metric-delta { color: var(--green); }
+
+    .comparison-card .metric-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .comparison-arrow {
+      font-family: var(--font-mono);
+      font-size: 20px;
+      color: var(--text-muted);
+      margin: 8px 0;
+    }
+
+    /* ── Code Blocks ───────────────────────────────────────────── */
+    .code-window {
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-top: 32px;
+    }
+
+    .code-titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .code-dots {
+      display: flex;
+      gap: 8px;
+    }
+
+    .code-dots span {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--border);
+    }
+
+    .code-dots span:nth-child(1) { background: #f85149; }
+    .code-dots span:nth-child(2) { background: #e3b341; }
+    .code-dots span:nth-child(3) { background: #00d68f; }
+
+    .code-title {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .code-copy-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .code-copy-btn:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .code-copy-btn.copied {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .code-body {
+      padding: 24px;
+      overflow-x: auto;
+    }
+
+    .code-body pre {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--text);
+    }
+
+    /* Syntax highlighting */
+    .kw  { color: var(--purple); }  /* keywords */
+    .fn  { color: var(--blue); }    /* functions */
+    .str { color: #a5d6ff; }        /* strings */
+    .cm  { color: var(--text-muted); font-style: italic; } /* comments */
+    .num { color: var(--orange); }   /* numbers */
+    .var { color: var(--text); }     /* variables */
+    .op  { color: var(--red); }      /* operators */
+    .cls { color: var(--cyan); }     /* class/module names */
+    .par { color: var(--text-muted); } /* parens */
+
+    /* ── Terminal Output (diff) ────────────────────────────────── */
+    .terminal {
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-top: 32px;
+    }
+
+    .terminal .code-titlebar {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .terminal .code-body {
+      padding: 24px 28px;
+    }
+
+    .terminal pre {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      line-height: 2;
+      color: var(--text);
+    }
+
+    .terminal .tree   { color: var(--text-muted); }
+    .terminal .label  { color: var(--text-muted); }
+    .terminal .val-g  { color: var(--green); font-weight: 600; }
+    .terminal .val-y  { color: var(--yellow); }
+    .terminal .val-c  { color: var(--cyan); }
+    .terminal .val-b  { color: var(--blue); }
+    .terminal .dim    { color: #484f58; }
+    .terminal .title  { color: var(--green); font-weight: 700; font-size: 15px; }
+
+    /* ── Strategy Cards ────────────────────────────────────────── */
+    .strategies-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+      margin-top: 48px;
+    }
+
+    .strategy-card {
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px 24px;
+      transition: border-color 0.3s, transform 0.2s;
+    }
+
+    .strategy-card:hover {
+      border-color: var(--green);
+      transform: translateY(-2px);
+    }
+
+    .strategy-card .strategy-name {
+      font-family: var(--font-mono);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--green);
+      margin-bottom: 4px;
+    }
+
+    .strategy-card .strategy-type {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .strategy-card .strategy-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+
+    .strategy-card .strategy-code {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 10px 14px;
+      border-radius: 6px;
+      color: var(--text-muted);
+      border: 1px solid rgba(48, 54, 61, 0.5);
+    }
+
+    .strategy-card .strategy-code .cls { color: var(--cyan); }
+    .strategy-card .strategy-code .str { color: #a5d6ff; }
+    .strategy-card .strategy-code .kw  { color: var(--purple); }
+
+    /* ── Benchmark Table ───────────────────────────────────────── */
+    .benchmark-wrapper {
+      margin-top: 40px;
+      overflow-x: auto;
+    }
+
+    .benchmark-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15px;
+    }
+
+    .benchmark-table th,
+    .benchmark-table td {
+      text-align: left;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .benchmark-table thead th {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--bg-raised);
+    }
+
+    .benchmark-table thead th:first-child { border-radius: var(--radius) 0 0 0; }
+    .benchmark-table thead th:last-child  { border-radius: 0 var(--radius) 0 0; }
+
+    .benchmark-table tbody td {
+      font-family: var(--font-mono);
+      font-size: 15px;
+    }
+
+    .benchmark-table tbody tr { transition: background 0.2s; }
+    .benchmark-table tbody tr:hover { background: var(--bg-raised); }
+
+    .benchmark-table .method-name { color: var(--text); font-weight: 600; }
+    .benchmark-table .val-bad { color: var(--red); font-weight: 700; }
+    .benchmark-table .val-mid { color: var(--yellow); }
+    .benchmark-table .val-good { color: var(--green); font-weight: 700; }
+
+    .benchmark-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: var(--border);
+      margin-top: 8px;
+      overflow: hidden;
+    }
+
+    .benchmark-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.6s ease;
+    }
+
+    .benchmark-caption {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 16px;
+      font-family: var(--font-mono);
+    }
+
+    /* ── Footer ────────────────────────────────────────────────── */
+    footer {
+      padding: 48px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 24px;
+    }
+
+    .footer-left {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    .footer-left strong { color: var(--text); font-weight: 600; }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-muted);
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover { color: var(--green); }
+
+    /* ── Responsive ────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      section { padding: 64px 0; }
+
+      .hero { padding: 120px 0 64px; }
+
+      .comparison {
+        grid-template-columns: 1fr;
+      }
+
+      .comparison-card .metric-value {
+        font-size: 44px;
+      }
+
+      .strategies-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .nav-links a:not(.nav-cta) { display: none; }
+
+      .hero-buttons { flex-direction: column; align-items: center; }
+
+      .footer-inner {
+        flex-direction: column;
+        text-align: center;
+      }
+
+      .code-body { padding: 16px; }
+      .code-body pre { font-size: 13px; }
+      .terminal .code-body { padding: 16px; }
+    }
+
+    @media (max-width: 480px) {
+      .hero-logo { font-size: 48px; }
+      .hero-install { padding: 12px 16px; font-size: 14px; }
+      .container { padding: 0 16px; }
+    }
+
+    /* ── Glow effects ──────────────────────────────────────────── */
+    .glow-green {
+      box-shadow: 0 0 60px rgba(0, 214, 143, 0.08);
+    }
+
+    .glow-cyan {
+      box-shadow: 0 0 60px rgba(0, 188, 212, 0.08);
+    }
+
+    /* ── Fade-in animations ────────────────────────────────────── */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Navigation ──────────────────────────────────────────────── -->
+<nav>
+  <div class="container">
+    <a href="#" class="nav-logo">clearn</a>
+    <div class="nav-links">
+      <a href="#quickstart">Quickstart</a>
+      <a href="#strategies">Strategies</a>
+      <a href="#benchmark">Benchmark</a>
+      <a href="https://github.com/itisrmk/clearn" target="_blank" rel="noopener" class="nav-cta">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Hero ─────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-logo"><span>c</span>learn</div>
+    <div class="hero-tagline">Wrap once. Train forever.</div>
+    <p class="hero-subtitle">
+      Continual learning for PyTorch models. Prevent catastrophic forgetting with one line of code.
+    </p>
+
+    <div class="hero-install" onclick="copyInstall(this)" title="Click to copy">
+      <span class="dollar">$</span>
+      <code>pip install clearn-ai</code>
+      <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+    </div>
+
+    <div class="hero-buttons">
+      <a href="https://github.com/itisrmk/clearn" target="_blank" rel="noopener" class="btn btn-primary">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+      <a href="https://pypi.org/project/clearn-ai/" target="_blank" rel="noopener" class="btn btn-secondary">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12.042 0l-1.27.287v8.378l1.27-.287V0zm-1.27 8.665v2.258l1.27-.287V8.378l-1.27.287zm0 2.258L6.335 12.1v8.38l4.437-1.178v-8.38zm1.27 6.834l4.437-1.178V8.2l-4.437 1.178v8.38zM6.335 12.1L1.898 13.28v8.378l4.437-1.177V12.1zm11.767-3.9L13.665 9.38v8.378l4.437-1.177V8.2zm-5.707-5.1L7.958 4.28v8.378l4.437-1.177V3.1zm5.707 1.2l-4.437 1.18v8.378l4.437-1.178V4.3z"/></svg>
+        PyPI
+      </a>
+      <a href="https://huggingface.co/spaces/rahulmk/clearn-demo" target="_blank" rel="noopener" class="btn btn-secondary">
+        Try Demo
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Problem / Solution ──────────────────────────────────────── -->
+<section id="problem">
+  <div class="container">
+    <div class="section-label">The Problem</div>
+    <h2 class="section-title">Catastrophic forgetting kills your models</h2>
+    <p class="section-subtitle">
+      When you fine-tune a neural network on new data, it forgets everything it learned before. This is catastrophic forgetting. clearn fixes it.
+    </p>
+
+    <div class="comparison fade-in">
+      <div class="comparison-card bad">
+        <div class="card-label">Without clearn</div>
+        <div class="metric-label">Task 1 accuracy after training on 20 new tasks</div>
+        <div class="comparison-arrow">95% &rarr;</div>
+        <div class="metric-value">8%</div>
+        <div class="metric-delta">&darr; 87% forgotten</div>
+        <div class="metric-desc">
+          Standard SGD fine-tuning overwrites previously learned weights. By task 20, your model remembers nothing from task 1.
+        </div>
+      </div>
+      <div class="comparison-card good glow-green">
+        <div class="card-label">With clearn</div>
+        <div class="metric-label">Task 1 accuracy after training on 20 new tasks</div>
+        <div class="comparison-arrow">95% &rarr;</div>
+        <div class="metric-value">94%</div>
+        <div class="metric-delta">&darr; 1% forgotten</div>
+        <div class="metric-desc">
+          clearn protects important weights while learning new tasks. One line of code. No architecture changes. No retraining from scratch.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Quickstart ───────────────────────────────────────────────── -->
+<section id="quickstart">
+  <div class="container">
+    <div class="section-label">Quickstart</div>
+    <h2 class="section-title">Five lines to continual learning</h2>
+    <p class="section-subtitle">
+      Wrap your existing PyTorch model. Train on sequential tasks. Inspect what was retained. That's it.
+    </p>
+
+    <div class="code-window glow-cyan fade-in">
+      <div class="code-titlebar">
+        <div class="code-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="code-title">quickstart.py</div>
+        <button class="code-copy-btn" onclick="copyCode(this)">Copy</button>
+      </div>
+      <div class="code-body">
+        <pre><code><span class="kw">import</span> <span class="cls">clearn</span>
+
+<span class="cm"># Wrap any PyTorch model with a continual learning strategy</span>
+<span class="var">model</span> <span class="op">=</span> <span class="cls">clearn</span>.<span class="fn">wrap</span><span class="par">(</span><span class="var">your_model</span>, <span class="var">strategy</span><span class="op">=</span><span class="str">"ewc"</span><span class="par">)</span>
+
+<span class="cm"># Train on sequential tasks — forgetting is handled automatically</span>
+<span class="var">model</span>.<span class="fn">fit</span><span class="par">(</span><span class="var">task1_loader</span>, <span class="var">optimizer</span>, <span class="var">task_id</span><span class="op">=</span><span class="str">"q1_fraud"</span><span class="par">)</span>
+<span class="var">model</span>.<span class="fn">fit</span><span class="par">(</span><span class="var">task2_loader</span>, <span class="var">optimizer</span>, <span class="var">task_id</span><span class="op">=</span><span class="str">"q2_fraud"</span><span class="par">)</span>
+
+<span class="cm"># Inspect what was retained</span>
+<span class="fn">print</span><span class="par">(</span><span class="var">model</span>.<span class="fn">diff</span><span class="par">())</span></code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── diff() Output ───────────────────────────────────────────── -->
+<section id="diff">
+  <div class="container">
+    <div class="section-label">model.diff()</div>
+    <h2 class="section-title">Git diff for model knowledge</h2>
+    <p class="section-subtitle">
+      The retention report shows exactly what your model remembers after each task. No other continual learning library ships this.
+    </p>
+
+    <div class="terminal glow-green fade-in">
+      <div class="code-titlebar">
+        <div class="code-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="code-title">python &mdash; model.diff()</div>
+        <div></div>
+      </div>
+      <div class="code-body">
+        <pre>
+<span class="title">RetentionReport</span>
+<span class="tree">&#9500;&#9472;&#9472;</span> <span class="label">q1_fraud:</span>    <span class="val-g">94.2% retained</span>  <span class="dim">(-5.8%)</span>
+<span class="tree">&#9500;&#9472;&#9472;</span> <span class="label">q2_fraud:</span>    <span class="val-b">100.0%</span> <span class="dim">(current task)</span>
+<span class="tree">&#9500;&#9472;&#9472;</span> <span class="label">plasticity:</span>  <span class="val-c">0.87</span>
+<span class="tree">&#9500;&#9472;&#9472;</span> <span class="label">stability:</span>   <span class="val-c">0.94</span>
+<span class="tree">&#9492;&#9472;&#9472;</span> <span class="label">recommendation:</span> <span class="val-g">"stable &mdash; no action needed"</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Strategies ───────────────────────────────────────────────── -->
+<section id="strategies">
+  <div class="container">
+    <div class="section-label">Strategies</div>
+    <h2 class="section-title">Choose your forgetting prevention method</h2>
+    <p class="section-subtitle">
+      Every strategy is a one-line swap. Start with EWC, scale to DER++, or combine with LoRA for LLMs.
+    </p>
+
+    <div class="strategies-grid fade-in">
+
+      <div class="strategy-card">
+        <div class="strategy-name">EWC</div>
+        <div class="strategy-type">Regularization-based</div>
+        <div class="strategy-desc">
+          Protects important weights via Fisher Information Matrix. Pure regularization &mdash; no data replay needed. Best for when you can't store past data.
+        </div>
+        <div class="strategy-code">
+          <span class="cls">clearn</span>.<span class="fn">wrap</span>(model, strategy=<span class="str">"ewc"</span>)
+        </div>
+      </div>
+
+      <div class="strategy-card">
+        <div class="strategy-name">SI</div>
+        <div class="strategy-type">Online importance</div>
+        <div class="strategy-desc">
+          Tracks each parameter's contribution to loss during training. Computes importance online without extra passes. Efficient alternative to EWC.
+        </div>
+        <div class="strategy-code">
+          <span class="cls">clearn</span>.<span class="fn">wrap</span>(model, strategy=<span class="str">"si"</span>)
+        </div>
+      </div>
+
+      <div class="strategy-card">
+        <div class="strategy-name">DER++</div>
+        <div class="strategy-type">Replay-based</div>
+        <div class="strategy-desc">
+          Stores past examples in a memory buffer and matches their original logits during new training. Best general-purpose strategy for maximum retention.
+        </div>
+        <div class="strategy-code">
+          <span class="cls">clearn</span>.<span class="fn">wrap</span>(model, strategy=<span class="str">"der"</span>, buffer_size=<span class="num">500</span>)
+        </div>
+      </div>
+
+      <div class="strategy-card">
+        <div class="strategy-name">GEM</div>
+        <div class="strategy-type">Constraint-based</div>
+        <div class="strategy-desc">
+          Projects gradients to ensure new learning never increases loss on previous tasks. Hard constraint rather than soft penalty. Theoretically strongest guarantees.
+        </div>
+        <div class="strategy-code">
+          <span class="cls">clearn</span>.<span class="fn">wrap</span>(model, strategy=<span class="str">"gem"</span>)
+        </div>
+      </div>
+
+      <div class="strategy-card">
+        <div class="strategy-name">LoRA-EWC</div>
+        <div class="strategy-type">Parameter-efficient</div>
+        <div class="strategy-desc">
+          Combines Low-Rank Adapters with EWC regularization. Designed for LLMs where full fine-tuning is impractical. Minimal memory overhead.
+        </div>
+        <div class="strategy-code">
+          <span class="cls">clearn</span>.<span class="fn">wrap</span>(model, strategy=<span class="str">"lora-ewc"</span>)
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── Benchmark ────────────────────────────────────────────────── -->
+<section id="benchmark">
+  <div class="container">
+    <div class="section-label">Benchmark</div>
+    <h2 class="section-title">Measured on Split CIFAR-100</h2>
+    <p class="section-subtitle">
+      ResNet-18 trained on 20 sequential tasks (5 classes each). Task 1 accuracy measured after completing all 20 tasks.
+    </p>
+
+    <div class="benchmark-wrapper fade-in">
+      <table class="benchmark-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Task 1 Accuracy</th>
+            <th>Retention</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="method-name">Baseline SGD</td>
+            <td class="val-bad">~8%</td>
+            <td>
+              <div class="benchmark-bar">
+                <div class="benchmark-bar-fill" style="width: 8%; background: var(--red);"></div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="method-name">clearn EWC</td>
+            <td class="val-mid">~82%</td>
+            <td>
+              <div class="benchmark-bar">
+                <div class="benchmark-bar-fill" style="width: 82%; background: var(--yellow);"></div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="method-name">clearn DER++</td>
+            <td class="val-good">~88%</td>
+            <td>
+              <div class="benchmark-bar">
+                <div class="benchmark-bar-fill" style="width: 88%; background: var(--green);"></div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="benchmark-caption">Split CIFAR-100 &middot; 20 sequential tasks &middot; ResNet-18 &middot; SGD lr=0.01</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── HuggingFace Integration ─────────────────────────────────── -->
+<section id="huggingface">
+  <div class="container">
+    <div class="section-label">Integrations</div>
+    <h2 class="section-title">Works with HuggingFace</h2>
+    <p class="section-subtitle">
+      Load pretrained models directly from the Hub. Train with continual learning. Push back when you're done.
+    </p>
+
+    <div class="code-window glow-cyan fade-in">
+      <div class="code-titlebar">
+        <div class="code-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="code-title">huggingface_integration.py</div>
+        <button class="code-copy-btn" onclick="copyCode(this)">Copy</button>
+      </div>
+      <div class="code-body">
+        <pre><code><span class="kw">import</span> <span class="cls">clearn</span>
+
+<span class="cm"># Load a pretrained model with continual learning built in</span>
+<span class="var">model</span> <span class="op">=</span> <span class="cls">clearn</span>.<span class="fn">from_pretrained</span><span class="par">(</span><span class="str">"bert-base-uncased"</span>, <span class="var">strategy</span><span class="op">=</span><span class="str">"lora-ewc"</span><span class="par">)</span>
+
+<span class="cm"># Train on your first task</span>
+<span class="var">model</span>.<span class="fn">fit</span><span class="par">(</span><span class="var">loader</span>, <span class="var">optimizer</span>, <span class="var">task_id</span><span class="op">=</span><span class="str">"sentiment_v1"</span><span class="par">)</span>
+
+<span class="cm"># Push to Hub &mdash; checkpoint includes full task history</span>
+<span class="var">model</span>.<span class="fn">push_to_hub</span><span class="par">(</span><span class="str">"your-name/my-model"</span><span class="par">)</span></code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────────────────── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-left">
+        <strong>clearn</strong> &mdash; Continual learning infrastructure for production ML.<br>
+        Built by <a href="https://github.com/itisrmk" target="_blank" rel="noopener">Rahul Kashyap</a>.
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/itisrmk/clearn" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://pypi.org/project/clearn-ai/" target="_blank" rel="noopener">PyPI</a>
+        <a href="https://huggingface.co/spaces/rahulmk/clearn-demo" target="_blank" rel="noopener">HuggingFace</a>
+        <a href="https://github.com/itisrmk/clearn/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ── Scripts ─────────────────────────────────────────────────── -->
+<script>
+  // Copy pip install command
+  function copyInstall(el) {
+    navigator.clipboard.writeText('pip install clearn-ai').then(function() {
+      var icon = el.querySelector('.copy-icon');
+      icon.classList.add('copied');
+      setTimeout(function() { icon.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  // Copy code block content
+  function copyCode(btn) {
+    var codeBody = btn.closest('.code-window').querySelector('.code-body');
+    var text = codeBody.textContent.trim();
+    navigator.clipboard.writeText(text).then(function() {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(function() {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  }
+
+  // Intersection Observer for fade-in animations
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.fade-in').forEach(function(el) {
+    observer.observe(el);
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,5 @@
+clearn-ai>=0.3.0
+gradio>=4.0
+matplotlib
+torch
+numpy
