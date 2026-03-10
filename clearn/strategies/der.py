@@ -25,7 +25,10 @@ class DER(BaseStrategy):
         model: The PyTorch model to protect.
         buffer_size: Maximum number of samples to store. Default: 200.
         alpha: Weight for cross-entropy replay loss. Default: 0.1.
-        beta: Weight for logit-matching (MSE) replay loss. Default: 0.5.
+        beta: Weight for logit-matching (KL divergence) replay loss. Default: 0.5.
+        temperature: Temperature for KL divergence logit matching. Default: 2.0.
+        buffer_device: Device to store buffer on ('cpu', 'cuda', etc.).
+            Default: 'cpu'. Set to 'cuda' to avoid CPU→GPU transfers each batch.
     """
 
     def __init__(
@@ -34,12 +37,16 @@ class DER(BaseStrategy):
         buffer_size: int = 200,
         alpha: float = 0.1,
         beta: float = 0.5,
+        temperature: float = 2.0,
+        buffer_device: str | torch.device = "cpu",
         **kwargs: Any,
     ) -> None:
         super().__init__(model, **kwargs)
         self._buffer_size = buffer_size
         self._alpha = alpha
         self._beta = beta
+        self._temperature = temperature
+        self._buffer_device = torch.device(buffer_device)
         self._buffer_inputs: list[torch.Tensor] = []
         self._buffer_logits: list[torch.Tensor] = []
         self._buffer_targets: list[torch.Tensor] = []
@@ -66,9 +73,9 @@ class DER(BaseStrategy):
 
         for i in range(inputs.size(0)):
             self._seen_count += 1
-            inp = inputs[i].detach().cpu()
-            tgt = targets[i].detach().cpu()
-            lgt = logits[i].detach().cpu()
+            inp = inputs[i].detach().to(self._buffer_device)
+            tgt = targets[i].detach().to(self._buffer_device)
+            lgt = logits[i].detach().to(self._buffer_device)
 
             if len(self._buffer_inputs) < self._buffer_size:
                 self._buffer_inputs.append(inp)
@@ -87,7 +94,8 @@ class DER(BaseStrategy):
         """Compute DER++ replay loss from buffered samples.
 
         Combines cross-entropy on replayed targets (alpha-weighted) and
-        MSE on original logits (beta-weighted).
+        KL divergence on original logits with temperature scaling
+        (beta-weighted).
 
         Args:
             model: The model to evaluate replay samples on.
@@ -114,9 +122,14 @@ class DER(BaseStrategy):
 
         # DER++ losses
         replay_ce = loss_fn(current_logits, buf_targets)
-        replay_mse = F.mse_loss(current_logits, buf_logits)
 
-        return self._alpha * replay_ce + self._beta * replay_mse
+        # KL divergence with temperature scaling for logit matching
+        T = self._temperature
+        log_p = F.log_softmax(current_logits / T, dim=1)
+        q = F.softmax(buf_logits / T, dim=1)
+        replay_kl = F.kl_div(log_p, q, reduction="batchmean") * (T * T)
+
+        return self._alpha * replay_ce + self._beta * replay_kl
 
     def consolidate(self, dataloader: DataLoader) -> None:
         """Top up the buffer if not full after training.
@@ -152,24 +165,57 @@ class DER(BaseStrategy):
         device = next(self.model.parameters()).device
         return torch.tensor(0.0, device=device)
 
+    def get_diagnostics(self) -> dict[str, Any]:
+        """Return DER++ diagnostic information.
+
+        Returns:
+            Dictionary with buffer statistics and config.
+        """
+        diag: dict[str, Any] = {
+            "strategy": "der++",
+            "buffer_size": self._buffer_size,
+            "buffer_used": len(self._buffer_inputs),
+            "buffer_utilization": len(self._buffer_inputs) / max(self._buffer_size, 1),
+            "total_samples_seen": self._seen_count,
+            "alpha": self._alpha,
+            "beta": self._beta,
+            "temperature": self._temperature,
+            "buffer_device": str(self._buffer_device),
+        }
+        if self._buffer_targets:
+            targets = torch.stack(self._buffer_targets)
+            unique, counts = targets.unique(return_counts=True)
+            diag["buffer_class_distribution"] = {
+                int(c): int(n) for c, n in zip(unique, counts)
+            }
+        return diag
+
     def state_dict(self) -> dict[str, Any]:
         """Serialize buffer contents and hyperparameters."""
         return {
-            "buffer_inputs": self._buffer_inputs,
-            "buffer_logits": self._buffer_logits,
-            "buffer_targets": self._buffer_targets,
+            "buffer_inputs": [t.cpu() for t in self._buffer_inputs],
+            "buffer_logits": [t.cpu() for t in self._buffer_logits],
+            "buffer_targets": [t.cpu() for t in self._buffer_targets],
             "buffer_size": self._buffer_size,
             "alpha": self._alpha,
             "beta": self._beta,
+            "temperature": self._temperature,
             "seen_count": self._seen_count,
         }
 
     def load_state_dict(self, state: dict[str, Any]) -> None:
         """Restore buffer and hyperparameters from saved state."""
-        self._buffer_inputs = state["buffer_inputs"]
-        self._buffer_logits = state["buffer_logits"]
-        self._buffer_targets = state["buffer_targets"]
+        self._buffer_inputs = [
+            t.to(self._buffer_device) for t in state["buffer_inputs"]
+        ]
+        self._buffer_logits = [
+            t.to(self._buffer_device) for t in state["buffer_logits"]
+        ]
+        self._buffer_targets = [
+            t.to(self._buffer_device) for t in state["buffer_targets"]
+        ]
         self._buffer_size = state["buffer_size"]
         self._alpha = state["alpha"]
         self._beta = state["beta"]
+        self._temperature = state.get("temperature", 2.0)
         self._seen_count = state["seen_count"]

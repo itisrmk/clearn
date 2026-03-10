@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, TensorDataset
 import pytest
 import clearn
 from clearn.core import ContinualModel
-from clearn.metrics import RetentionReport
+from clearn.metrics import RetentionReport, TrainingMetrics
 from clearn.strategies.ewc import EWC
 
 
@@ -54,11 +54,15 @@ class TestFit:
         cl.fit(dummy_dataloader, opt, task_id="my_task")
         assert "my_task" in cl._task_history
 
-    def test_fit_returns_self(self, tiny_mlp, dummy_dataloader):
+    def test_fit_returns_training_metrics(self, tiny_mlp, dummy_dataloader):
         cl = clearn.wrap(tiny_mlp)
         opt = torch.optim.SGD(tiny_mlp.parameters(), lr=0.01)
         result = cl.fit(dummy_dataloader, opt)
-        assert result is cl
+        assert isinstance(result, TrainingMetrics)
+        assert result.epochs == 1
+        assert result.final_loss >= 0
+        assert 0 <= result.final_accuracy <= 1
+        assert result.wall_time >= 0
 
     def test_fit_multiple_tasks(self, tiny_mlp, dummy_dataloader):
         cl = clearn.wrap(tiny_mlp)

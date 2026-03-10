@@ -2,11 +2,43 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+
+
+@dataclass
+class TrainingMetrics:
+    """Metrics returned by ``ContinualModel.fit()``.
+
+    Attributes:
+        task_id: The task identifier.
+        epochs: Number of training epochs.
+        epoch_losses: Average loss per epoch.
+        epoch_accuracies: Training accuracy per epoch.
+        final_loss: Loss at the end of training.
+        final_accuracy: Accuracy at the end of training.
+        wall_time: Total wall-clock time in seconds.
+    """
+
+    task_id: str = ""
+    epochs: int = 0
+    epoch_losses: list[float] = field(default_factory=list)
+    epoch_accuracies: list[float] = field(default_factory=list)
+    final_loss: float = 0.0
+    final_accuracy: float = 0.0
+    wall_time: float = 0.0
+
+    def __repr__(self) -> str:
+        lines = [f"TrainingMetrics(task={self.task_id!r})"]
+        lines.append(f"├── epochs: {self.epochs}")
+        lines.append(f"├── final_loss: {self.final_loss:.4f}")
+        lines.append(f"├── final_accuracy: {self.final_accuracy:.2%}")
+        lines.append(f"└── wall_time: {self.wall_time:.2f}s")
+        return "\n".join(lines)
 
 
 @dataclass

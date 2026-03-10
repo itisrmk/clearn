@@ -6,9 +6,11 @@ from typing import Any
 
 import torch.nn as nn
 
+from clearn.callbacks import ContinualCallback, EarlyStoppingCallback
 from clearn.core import ContinualModel
+from clearn.metrics import TrainingMetrics
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 
 def wrap(
@@ -45,4 +47,13 @@ try:
 except ImportError:
     from clearn.integrations import from_pretrained  # fallback stub
 
-__all__ = ["wrap", "load", "from_pretrained", "ContinualModel", "__version__"]
+__all__ = [
+    "wrap",
+    "load",
+    "from_pretrained",
+    "ContinualModel",
+    "ContinualCallback",
+    "EarlyStoppingCallback",
+    "TrainingMetrics",
+    "__version__",
+]

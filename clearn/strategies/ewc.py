@@ -138,6 +138,28 @@ class EWC(BaseStrategy):
 
         return (self._lambda / 2) * penalty
 
+    def get_diagnostics(self) -> dict[str, Any]:
+        """Return EWC diagnostic information.
+
+        Returns:
+            Dictionary with Fisher matrix statistics and config.
+        """
+        diag: dict[str, Any] = {
+            "strategy": "ewc",
+            "lambda": self._lambda,
+            "n_fisher_samples": self._n_fisher_samples,
+            "consolidated": self._fisher is not None,
+        }
+        if self._fisher is not None:
+            all_fisher = torch.cat([f.flatten() for f in self._fisher.values()])
+            diag["fisher_mean"] = float(all_fisher.mean())
+            diag["fisher_std"] = float(all_fisher.std())
+            diag["fisher_max"] = float(all_fisher.max())
+            diag["fisher_min"] = float(all_fisher.min())
+            diag["n_protected_params"] = len(self._fisher)
+            diag["current_penalty"] = float(self.penalty().item())
+        return diag
+
     def state_dict(self) -> dict[str, Any]:
         """Serialize EWC state (Fisher matrix, optimal params, hyperparams)."""
         return {

@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Any
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from clearn.metrics import RetentionReport, _get_recommendation, compute_retention
+from clearn.metrics import (
+    RetentionReport,
+    TrainingMetrics,
+    _get_recommendation,
+    compute_retention,
+)
 from clearn.strategies import BaseStrategy, get_strategy
 from clearn.utils import (
     forward_with_inputs,
@@ -122,10 +128,13 @@ class ContinualModel:
         epochs: int = 1,
         task_id: str | None = None,
         loss_fn: nn.Module | None = None,
-    ) -> ContinualModel:
+        grad_clip: float | None = None,
+        callbacks: list[Any] | None = None,
+        use_amp: bool = False,
+    ) -> TrainingMetrics:
         """Train the model on a new task with forgetting protection.
 
-        Automatically calls `consolidate()` after training to lock in
+        Automatically calls ``consolidate()`` after training to lock in
         the learned knowledge.
 
         Args:
@@ -134,9 +143,12 @@ class ContinualModel:
             epochs: Number of training epochs. Default: 1.
             task_id: Optional name for this task. Auto-generated if None.
             loss_fn: Loss function. Defaults to CrossEntropyLoss.
+            grad_clip: Max gradient norm for clipping. None disables clipping.
+            callbacks: Optional list of ``ContinualCallback`` instances.
+            use_amp: Enable automatic mixed precision (requires CUDA).
 
         Returns:
-            self, for method chaining.
+            A TrainingMetrics object with per-epoch loss/accuracy and timing.
         """
         if task_id is None:
             task_id = generate_task_id(self._task_history)
@@ -144,30 +156,92 @@ class ContinualModel:
         if loss_fn is None:
             loss_fn = nn.CrossEntropyLoss()
 
+        if callbacks is None:
+            callbacks = []
+
+        # Let strategy know the current task ID (used by GEM)
+        if hasattr(self.strategy, "set_task_id"):
+            self.strategy.set_task_id(task_id)
+
+        # Fire on_task_start callbacks
+        for cb in callbacks:
+            cb.on_task_start(self, task_id)
+
+        # Set up AMP scaler
+        scaler = torch.amp.GradScaler(enabled=use_amp)
+        amp_device_type = "cuda" if self._device.type == "cuda" else "cpu"
+
         self.model.train()
 
+        start_time = time.monotonic()
+        epoch_losses: list[float] = []
+        epoch_accuracies: list[float] = []
+
         for _epoch in range(epochs):
+            running_loss = 0.0
+            running_correct = 0
+            running_total = 0
+
             for batch in dataloader:
                 model_inputs, targets = unpack_batch(batch, self._device)
 
                 optimizer.zero_grad()
 
-                outputs = forward_with_inputs(self.model, model_inputs)
-                task_loss = loss_fn(outputs, targets)
+                with torch.amp.autocast(
+                    device_type=amp_device_type, enabled=use_amp
+                ):
+                    outputs = forward_with_inputs(self.model, model_inputs)
+                    task_loss = loss_fn(outputs, targets)
 
-                penalty = self.strategy.penalty()
-                replay_loss = self.strategy.get_replay_loss(self.model, loss_fn)
+                    penalty = self.strategy.penalty()
+                    replay_loss = self.strategy.get_replay_loss(
+                        self.model, loss_fn
+                    )
 
-                loss = task_loss + penalty + replay_loss
+                    loss = task_loss + penalty + replay_loss
 
-                loss.backward()
-                optimizer.step()
+                scaler.scale(loss).backward()
+
+                # Hook for strategies that modify gradients (e.g. GEM)
+                if use_amp:
+                    scaler.unscale_(optimizer)
+                self.strategy.before_optimizer_step()
+
+                if grad_clip is not None:
+                    if not use_amp:
+                        # Already unscaled above if use_amp
+                        pass
+                    nn.utils.clip_grad_norm_(self.model.parameters(), grad_clip)
+
+                scaler.step(optimizer)
+                scaler.update()
+
+                # Hook for strategies that track params online (e.g. SI)
+                self.strategy.after_optimizer_step()
 
                 # Update replay buffer (no-op for non-replay strategies)
                 buf_inputs = inputs_for_buffer(model_inputs)
                 self.strategy.update_buffer(
                     buf_inputs.detach(), targets.detach(), logits=outputs.detach()
                 )
+
+                # Track metrics
+                batch_size = targets.size(0)
+                running_loss += loss.item() * batch_size
+                preds = outputs.argmax(dim=1)
+                running_correct += (preds == targets).sum().item()
+                running_total += batch_size
+
+                # Fire on_batch_end callbacks
+                for cb in callbacks:
+                    cb.on_batch_end(self, loss.item())
+
+            avg_loss = running_loss / max(running_total, 1)
+            avg_acc = running_correct / max(running_total, 1)
+            epoch_losses.append(avg_loss)
+            epoch_accuracies.append(avg_acc)
+
+        wall_time = time.monotonic() - start_time
 
         # Consolidate — lock in knowledge from this task
         self.strategy.consolidate(dataloader)
@@ -181,7 +255,22 @@ class ContinualModel:
         )
 
         self._task_history.append(task_id)
-        return self
+
+        metrics = TrainingMetrics(
+            task_id=task_id,
+            epochs=epochs,
+            epoch_losses=epoch_losses,
+            epoch_accuracies=epoch_accuracies,
+            final_loss=epoch_losses[-1] if epoch_losses else 0.0,
+            final_accuracy=epoch_accuracies[-1] if epoch_accuracies else 0.0,
+            wall_time=wall_time,
+        )
+
+        # Fire on_task_end callbacks
+        for cb in callbacks:
+            cb.on_task_end(self, task_id, metrics)
+
+        return metrics
 
     def diff(self) -> RetentionReport:
         """Compute a retention report across all trained tasks.
@@ -229,20 +318,47 @@ class ContinualModel:
             recommendation=recommendation,
         )
 
+    def diagnostics(self) -> dict[str, Any]:
+        """Return diagnostic information about the current strategy state.
+
+        Returns:
+            A dictionary with strategy-specific diagnostic metrics.
+        """
+        diag = self.strategy.get_diagnostics()
+        diag["tasks_trained"] = len(self._task_history)
+        diag["task_history"] = list(self._task_history)
+        return diag
+
     def save(self, path: str) -> None:
         """Save the full model and strategy state to disk.
+
+        Serializes model weights, strategy state, task history, and
+        evaluation data so that ``diff()`` works after ``load()``.
 
         Args:
             path: Directory path to save the checkpoint to.
         """
         os.makedirs(path, exist_ok=True)
+
+        # Serialize eval dataloaders as raw tensor pairs
+        eval_data: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
+        for task_id, dl in self._task_dataloaders.items():
+            all_x, all_y = [], []
+            for batch in dl:
+                x, y = batch[0], batch[1]
+                all_x.append(x.cpu())
+                all_y.append(y.cpu())
+            if all_x:
+                eval_data[task_id] = (torch.cat(all_x), torch.cat(all_y))
+
         checkpoint = {
             "model_state_dict": self.model.state_dict(),
             "strategy_name": self._strategy_name,
             "strategy_state": self.strategy.state_dict(),
             "task_history": self._task_history,
             "eval_cache": self._eval_cache,
-            "version": "0.1.0",
+            "eval_data": eval_data,
+            "version": "0.2.1",
         }
         torch.save(checkpoint, os.path.join(path, "checkpoint.pt"))
 
@@ -282,7 +398,85 @@ class ContinualModel:
         instance._task_history = checkpoint["task_history"]
         instance._eval_cache = checkpoint["eval_cache"]
 
+        # Restore eval dataloaders so diff() works after load()
+        eval_data = checkpoint.get("eval_data", {})
+        for task_id, (X, y) in eval_data.items():
+            dataset = TensorDataset(X, y)
+            instance._task_dataloaders[task_id] = DataLoader(
+                dataset, batch_size=64
+            )
+
         return instance
+
+    def save_pretrained(self, path: str) -> None:
+        """Save model using HuggingFace's save_pretrained + clearn state.
+
+        For HuggingFace models, saves using the native ``save_pretrained``
+        format alongside the clearn checkpoint. This makes models compatible
+        with ``push_to_hub``.
+
+        Args:
+            path: Directory path to save to.
+        """
+        os.makedirs(path, exist_ok=True)
+
+        # Save HF model natively if it supports save_pretrained
+        if hasattr(self.model, "save_pretrained"):
+            self.model.save_pretrained(path)
+
+        # Always save clearn checkpoint alongside
+        self.save(path)
+
+    def push_to_hub(
+        self,
+        repo_id: str,
+        commit_message: str = "Upload clearn continual learning model",
+        private: bool = False,
+        token: str | None = None,
+    ) -> str:
+        """Push the model and clearn state to the HuggingFace Hub.
+
+        Saves the model using HuggingFace's native format alongside the
+        clearn checkpoint, then uploads to the Hub.
+
+        Args:
+            repo_id: The HuggingFace Hub repository ID (e.g. "user/model-name").
+            commit_message: Commit message for the upload.
+            private: Whether the repository should be private. Default: False.
+            token: HuggingFace API token. Uses cached token if None.
+
+        Returns:
+            The URL of the uploaded model on the Hub.
+
+        Raises:
+            ImportError: If ``huggingface_hub`` is not installed.
+        """
+        try:
+            from huggingface_hub import HfApi
+        except ImportError:
+            raise ImportError(
+                "push_to_hub requires 'huggingface_hub'. "
+                "Install with: pip install huggingface_hub"
+            )
+
+        import tempfile
+
+        api = HfApi(token=token)
+
+        # Create or get repo
+        api.create_repo(repo_id, private=private, exist_ok=True)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self.save_pretrained(tmp_dir)
+
+            # Upload all files
+            api.upload_folder(
+                folder_path=tmp_dir,
+                repo_id=repo_id,
+                commit_message=commit_message,
+            )
+
+        return f"https://huggingface.co/{repo_id}"
 
     def __getattr__(self, name: str) -> Any:
         """Delegate attribute access to the underlying model.

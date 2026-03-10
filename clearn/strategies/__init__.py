@@ -9,10 +9,15 @@ import torch.nn as nn
 from clearn.strategies.base import BaseStrategy
 from clearn.strategies.der import DER
 from clearn.strategies.ewc import EWC
+from clearn.strategies.gem import GEM
+from clearn.strategies.si import SI
 
 STRATEGY_REGISTRY: dict[str, type[BaseStrategy]] = {
     "ewc": EWC,
     "der": DER,
+    "si": SI,
+    "gem": GEM,
+    "agem": GEM,
 }
 
 # Lazy registration for strategies with optional deps
@@ -66,4 +71,4 @@ def get_strategy(
     )
 
 
-__all__ = ["BaseStrategy", "DER", "EWC", "get_strategy", "STRATEGY_REGISTRY"]
+__all__ = ["BaseStrategy", "DER", "EWC", "GEM", "SI", "get_strategy", "STRATEGY_REGISTRY"]

@@ -74,6 +74,30 @@ class BaseStrategy(ABC):
         """
         return torch.tensor(0.0, device=next(model.parameters()).device)
 
+    def before_optimizer_step(self) -> None:
+        """Called after backward() but before optimizer.step().
+
+        Override for strategies that need to modify gradients
+        before the parameter update (e.g., GEM gradient projection).
+        """
+
+    def after_optimizer_step(self) -> None:
+        """Called after each optimizer step during training.
+
+        Override for strategies that need to track parameter changes
+        online (e.g., Synaptic Intelligence).
+        """
+
+    def get_diagnostics(self) -> dict[str, Any]:
+        """Return strategy-specific diagnostic information.
+
+        Override in subclasses to provide useful debugging info.
+
+        Returns:
+            A dictionary of diagnostic metrics.
+        """
+        return {}
+
     def state_dict(self) -> dict[str, Any]:
         """Return strategy-specific state for serialization.
 

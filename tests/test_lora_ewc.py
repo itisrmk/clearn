@@ -135,3 +135,25 @@ class TestLoRAEWCIntegration:
         report = cl.diff()
         assert "t1" in report.task_scores
         assert "t2" in report.task_scores
+
+    def test_lora_ewc_diagnostics(self):
+        """get_diagnostics() should return LoRA config + Fisher stats."""
+        import clearn
+        base = nn.Sequential(nn.Linear(20, 64), nn.ReLU(), nn.Linear(64, 4))
+        cl = clearn.wrap(base, strategy="lora-ewc", lora_r=4, target_modules=["0", "2"])
+
+        diag = cl.diagnostics()
+        assert diag["strategy"] == "lora-ewc"
+        assert diag["lora_r"] == 4
+        assert diag["consolidated"] is False
+
+        X = torch.randn(40, 20)
+        y = torch.randint(0, 4, (40,))
+        loader = DataLoader(TensorDataset(X, y), batch_size=16)
+        opt = torch.optim.Adam(cl.model.parameters(), lr=0.001)
+        cl.fit(loader, opt, task_id="t1")
+
+        diag = cl.diagnostics()
+        assert diag["consolidated"] is True
+        assert "fisher_mean" in diag
+        assert diag["total_lora_parameters"] > 0
